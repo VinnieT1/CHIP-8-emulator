@@ -1,10 +1,12 @@
 #include "chip8.h"
 
-int chip8_init(chip8_t *chip8) {
+int chip8_init(chip8_t *chip8, char *rom_name) {
     chip8->opcode = 0;
     chip8->I = 0;
     chip8->pc = 0x200;
     chip8->sp = 0;
+    chip8->rom_name = rom_name;
+    chip8->state = RUNNING;
 
     memset(chip8->stack, 0, STACK_SIZE * sizeof(u16_t));
     memset(chip8->memory, 0, MEMORY_SIZE * sizeof(u8_t));
@@ -278,6 +280,11 @@ int chip8_execute_instruction(chip8_t *chip8) {
 }
 
 int chip8_update_timers(chip8_t *chip8) {
-    // TODO
+    if (chip8->delay_timer > 0) {
+        chip8->delay_timer -= 1;
+    }
+    if (chip8->sound_timer > 0) {
+        chip8->sound_timer -= 1;
+    }
     return 0;
 }

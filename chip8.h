@@ -58,6 +58,8 @@ typedef enum {
  * @brief CHIP8 type: emulates CHIP8 components
  */
 typedef struct chip8 {
+	char *rom_name;
+
 	chip8_state_t state;
 
     u16_t opcode;
@@ -101,7 +103,7 @@ u8_t chip8_fontset[80] =
  * @param[in] chip8 Chip8 being emulated.
  * @return int 0 in case of success and and a negative integer in case of failure.
  */
-int chip8_init(chip8_t *chip8);
+int chip8_init(chip8_t *chip8, char *rom_name);
 
 /**
  * @brief Emulates a chip8 cycle.

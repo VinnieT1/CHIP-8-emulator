@@ -1,22 +1,20 @@
 #include "SDL.h"
 #include "chip8.c"
+#include "main.h"
 
 typedef struct {
     SDL_Window *window;
     SDL_Renderer *renderer;
 } sdl_t;
 
-u8_t init_sdl(sdl_t *sdl, int argc, char *argv[]) {
+u8_t init_sdl(sdl_t *sdl, int scale) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER) != 0) {
         printf("Unable to init SDL: %s", SDL_GetError());
         return -1;
     }
 
-    u16_t width = atoi(argv[1]);
-    u16_t height = atoi(argv[2]);
-
     sdl->window = SDL_CreateWindow("CHIP-8", SDL_WINDOWPOS_CENTERED,
-                            SDL_WINDOWPOS_CENTERED, width * 20, height * 20, 0);
+                            SDL_WINDOWPOS_CENTERED, 64 * scale, 32 * scale, 0);
     if (sdl->window == NULL) {
         printf("SDL could not initialize window: %s\n", SDL_GetError());
         return -1;
@@ -65,19 +63,23 @@ int handle_input(sdl_t *sdl, chip8_t *chip8) {
                     case SDLK_ESCAPE:
                         chip8->state = QUIT;
                         return 0;
-                    case SDLK_UP:
-                    printf("up\n");
-                        u8_t r, g, b, a;
-                        if (SDL_GetRenderDrawColor(sdl->renderer, &r, &g, &b, &a) != 0 ||
-                            SDL_SetRenderDrawColor(sdl->renderer, r + 6, g + 12, b + 20, a) != 0) {
-                            printf("SDL could not set render color: %s\n", SDL_GetError());
-                            return -1;
+                    case SDLK_SPACE:
+                        if (chip8->state == RUNNING && event.key.state == SDL_PRESSED) {
+                            chip8->state = PAUSED;
+                            printf("EMULATION PAUSED\n");
                         }
+                        else if (chip8->state == PAUSED && event.key.state == SDL_PRESSED) {
+                            chip8->state = RUNNING;
+                            printf("EMULATION RESUMED\n");
+                        }
+                        break;
+                    case SDLK_LCTRL:
+                        printf("State: %s\n", chip8->state == PAUSED ? "PAUSED" : "RUNNING");
+                        break;
                     default:
                         break;
                 }
             default:
-                chip8->state =  RUNNING;
                 break;
         }
     }
@@ -85,21 +87,24 @@ int handle_input(sdl_t *sdl, chip8_t *chip8) {
     return 0;
 }
 
-// main 64 32
+// main <rom_name>
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        printf("Specify width and height as (only) arguments when running.\n\tEx.: main 64 32\n");
+    if (argc != 2) {
+        printf("Specify rom name when running.\n\tEx.: main <path/to/rom_name>\n");
         return -1;
     }
 
+    char *rom_name = argv[1];
+    int scale = 20;
+
     sdl_t sdl;
-    if (init_sdl(&sdl, argc, argv) != 0) {
+    if (init_sdl(&sdl, scale) != 0) {
         printf("Init error: %s\n", SDL_GetError());
         return -1;
     }
 
     chip8_t chip8;
-    if (chip8_init(&chip8) != 0) {
+    if (chip8_init(&chip8, rom_name) != 0) {
         printf("Init error on chip8\n");
         return -1;
     }
@@ -123,6 +128,13 @@ int main(int argc, char *argv[]) {
             return -1;
         }
         SDL_Delay(16);
+
+        u8_t r, g, b, a;
+        SDL_GetRenderDrawColor(sdl.renderer, &r, &g, &b, &a);
+        if (SDL_SetRenderDrawColor(sdl.renderer, r + 3, g + 8, b + 14, a) != 0) {
+        printf("SDL could not set render color: %s\n", SDL_GetError());
+        return -1;
+    }
 
         update_display(&sdl);
     }
