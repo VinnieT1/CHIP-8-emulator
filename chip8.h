@@ -46,6 +46,11 @@ typedef unsigned char u8_t;
 typedef unsigned short u16_t;
 
 /**
+ * @brief starting index in memory where roms are loaded
+ */
+#define ROM_INDEX_START 0x200
+
+/**
  * @brief CHIP8 state: if game is running, paused or quitting.
  */
 typedef enum {
@@ -145,5 +150,7 @@ int chip8_update_timers(chip8_t *chip8);
  * @return int 0 in case of success and and a negative integer in case of failure.
  */
 int chip8_increment_pc(chip8_t *chip8);
+
+int chip8_load_rom(chip8_t *chip8);
 
 #endif

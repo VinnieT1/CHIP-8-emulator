@@ -21,6 +21,11 @@ int chip8_init(chip8_t *chip8, char *rom_name) {
         chip8->memory[i] = chip8_fontset[i];
     }
 
+    if (chip8_load_rom(chip8) != 0) {
+        printf("Could not load ROM\n");
+        return -1;
+    }
+
     return 0;
 }
 
@@ -29,7 +34,7 @@ int chip8_fetch_opcode(chip8_t *chip8) {
     u16_t pc = chip8->pc;
 
     chip8->opcode = ((u16_t)memory[pc] << 8) | (memory[pc + 1]);
-    
+
     return 0;
 }
 
@@ -68,30 +73,34 @@ int chip8_execute_instruction(chip8_t *chip8) {
 
     // useful reference of registers
     u8_t *V = chip8->V;
-
+    printf("Address: 0x%04X, Opcode: 0x%04X, ", chip8->pc, opcode);
     switch (first_opcode_nibble) {
         case 0x0:
             // Clear the display.
             if (opcode == 0x00E0) {
+                printf("Clear the display\n");
                 memset(chip8->pixels, 0, PIXEL_COLUMNS * PIXEL_ROWS * sizeof(u8_t));
             }
             // Return from a subroutine.
             else if (opcode == 0x00EE) {
+                printf("Return from a subroutine\n");
                 chip8->sp--;
                 chip8->pc = chip8->stack[chip8->sp] - 2;
             }
             // Jump to a machine code routine at nnn. 0x0nnn
             else {
-                // printf("NOT IMPLEMENTED\n");
-                // do nothing
+                // printf("Not implemented\n");
+                chip8->pc = (opcode & 0x0FFF) - 2;
             }
             break;
         case 0x1:
             // Jump to location nnn.
+            printf("Jump to location 0x%04X\n", opcode & 0x0FFF);
             chip8->pc = (opcode & 0x0FFF) - 2;
             break;
         case 0x2:
             // Call subroutine at nnn.
+            printf("Call subroutine at 0x%04X\n", opcode & 0x0FFF);
             chip8->memory[chip8->sp] = chip8->pc;
             chip8->sp += 1;
             chip8->pc = opcode & 0x0FFF;
@@ -116,10 +125,12 @@ int chip8_execute_instruction(chip8_t *chip8) {
             break;
         case 0x6:
             // Set Vx = kk.
+            printf("Set V[%01X] = %d\n", x, (int)kk);
             chip8->V[x] = kk;
             break;
         case 0x7:
             // Set Vx = Vx + kk.
+            printf("Set V[%X] = V[%X] (0x%X; %d) + 0x%X (%d) = %d or 0x%X\n", x, x, V[x], V[x], kk, kk, V[x] + kk, V[x] + kk);
             chip8->V[x] += kk;
             break;
         case 0x8:
@@ -173,6 +184,7 @@ int chip8_execute_instruction(chip8_t *chip8) {
             break;
         case 0xA:
             // Set I = nnn.
+            printf("Set I = 0x%04X\n", opcode & 0x0FFF);
             chip8->I = opcode & 0x0FFF;
             break;
         case 0xB:
@@ -185,26 +197,33 @@ int chip8_execute_instruction(chip8_t *chip8) {
             break;
         case 0xD:
             // Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
+            printf("Display %d-byte sprite starting at memory location I = 0x%04X at (V[%X] = %d, V[%X] = %d), set V[F] collision\n", code, chip8->I, x, V[x], y, V[y]);
+            u16_t x_coord = V[x] % PIXEL_COLUMNS;
+            u16_t y_coord = V[y] % PIXEL_ROWS;
+            u16_t original_x = x_coord;
             V[0xF] = 0;
+            
+            for (u8_t i = 0; i < code; i++) {
+                u8_t sprite_data = chip8->memory[chip8->I + i];
+                x_coord = original_x;
 
-            for (u8_t height = 0; height < code; height++) {
-                u8_t pixel = chip8->memory[chip8->I + height];
+                for (int8_t j = 7; j >= 0; j--) {
+                    u8_t *pixel = &(chip8->pixels[y_coord * PIXEL_COLUMNS + x_coord]);
+                    u8_t sprite_bit = (sprite_data & (1 << j));
 
-                for (u8_t width = 0; width < 8; width++) {
-                    if (pixel & (0b10000000 >> width)) {
-                        u16_t tX = (V[x] + height) % PIXEL_COLUMNS;
-                        u16_t tY = (V[y] + width) % PIXEL_ROWS;
+                    if (sprite_bit && *pixel) {
+                        chip8->V[0xF] = 1;
+                    }
+                    *pixel ^= sprite_bit;
 
-                        u16_t idx = 64 * tY + tX;
-
-                        chip8->pixels[idx] ^= 1;
-
-                        if (chip8->pixels[idx] == 0) {
-                            V[0xF] = 1;
-                        }
+                    if (++x_coord >= PIXEL_COLUMNS) {
+                        break;
                     }
                 }
 
+                if (++y_coord >= PIXEL_ROWS) {
+                    break;
+                }
             }
             break;
         case 0xE:
@@ -267,7 +286,7 @@ int chip8_execute_instruction(chip8_t *chip8) {
             }
             // Read registers V0 through Vx from memory starting at location I.
             else if (kk == 0x65) {
-                for (u8_t i = 0; i < x; i++) {
+                for (u8_t i = 0; i <= x; i++) {
                     V[i] = chip8->memory[chip8->I + i];
                 }
             }
@@ -286,5 +305,26 @@ int chip8_update_timers(chip8_t *chip8) {
     if (chip8->sound_timer > 0) {
         chip8->sound_timer -= 1;
     }
+    return 0;
+}
+
+int chip8_load_rom(chip8_t *chip8) {
+    FILE *rom = fopen(chip8->rom_name, "rb");
+    if (rom == NULL) {
+        return -1;
+    }
+    fseek(rom, 0, SEEK_END);
+
+    long rom_size = ftell(rom);
+    if (rom_size > MEMORY_SIZE - 0x200) {
+        printf("ROM too big\n");
+        return -1;
+    }
+
+    rewind(rom);
+    
+    fread(&chip8->memory[ROM_INDEX_START], rom_size, sizeof(u8_t), rom);
+    fclose(rom);
+
     return 0;
 }

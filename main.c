@@ -5,16 +5,17 @@
 typedef struct {
     SDL_Window *window;
     SDL_Renderer *renderer;
+    int scale;
 } sdl_t;
 
-u8_t init_sdl(sdl_t *sdl, int scale) {
+u8_t init_sdl(sdl_t *sdl) {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER) != 0) {
         printf("Unable to init SDL: %s", SDL_GetError());
         return -1;
     }
 
     sdl->window = SDL_CreateWindow("CHIP-8", SDL_WINDOWPOS_CENTERED,
-                            SDL_WINDOWPOS_CENTERED, 64 * scale, 32 * scale, 0);
+                            SDL_WINDOWPOS_CENTERED, PIXEL_COLUMNS * sdl->scale,  PIXEL_ROWS * sdl->scale, 0);
     if (sdl->window == NULL) {
         printf("SDL could not initialize window: %s\n", SDL_GetError());
         return -1;
@@ -45,8 +46,28 @@ void clean_up_sdl(sdl_t *sdl) {
     SDL_Quit();
 }
 
-void update_display(sdl_t *sdl) {
-    SDL_RenderClear(sdl->renderer);
+void update_display(sdl_t *sdl, chip8_t *chip8) {
+    SDL_Rect rect = {
+        .h = sdl->scale,
+        .w = sdl->scale,
+        .x = 0,
+        .y = 0
+    };
+
+    for (u16_t i = 0; i < PIXEL_COLUMNS * PIXEL_ROWS; i++) {
+        rect.x = (i % PIXEL_COLUMNS) * sdl->scale;
+        rect.y = (i / PIXEL_COLUMNS) * sdl->scale;
+
+        if (chip8->pixels[i]) {
+            SDL_SetRenderDrawColor(sdl->renderer, 0xFF, 0xFF, 0xFF, SDL_ALPHA_OPAQUE);
+            SDL_RenderFillRect(sdl->renderer, &rect);
+        }
+        else {
+            SDL_SetRenderDrawColor(sdl->renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+            SDL_RenderFillRect(sdl->renderer, &rect);
+        }
+    }
+
     SDL_RenderPresent(sdl->renderer);
 }
 
@@ -90,7 +111,7 @@ int handle_input(sdl_t *sdl, chip8_t *chip8) {
 // main <rom_name>
 int main(int argc, char *argv[]) {
     if (argc != 2) {
-        printf("Specify rom name when running.\n\tEx.: main <path/to/rom_name>\n");
+        printf("Specify rom name when running.\n\tEx.: main <path/to/rom_name>\nOr simply drag the ROM into the .exe");
         return -1;
     }
 
@@ -98,7 +119,8 @@ int main(int argc, char *argv[]) {
     int scale = 20;
 
     sdl_t sdl;
-    if (init_sdl(&sdl, scale) != 0) {
+    sdl.scale = scale;
+    if (init_sdl(&sdl) != 0) {
         printf("Init error: %s\n", SDL_GetError());
         return -1;
     }
@@ -129,14 +151,7 @@ int main(int argc, char *argv[]) {
         }
         SDL_Delay(16);
 
-        u8_t r, g, b, a;
-        SDL_GetRenderDrawColor(sdl.renderer, &r, &g, &b, &a);
-        if (SDL_SetRenderDrawColor(sdl.renderer, r + 3, g + 8, b + 14, a) != 0) {
-        printf("SDL could not set render color: %s\n", SDL_GetError());
-        return -1;
-    }
-
-        update_display(&sdl);
+        update_display(&sdl, &chip8);
     }
 
     clean_up_sdl(&sdl);
